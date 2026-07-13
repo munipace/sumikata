@@ -6,7 +6,7 @@
       name="viewport"
       content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content"
     />
-    <title>小さな暮らしの世界 — 自律NPC観察</title>
+    <title>SUMIKATA — 自律NPC観察</title>
     <style>
       :root {
         color-scheme: light;
@@ -290,6 +290,76 @@
       #landBtn {
         min-width: 42px;
       }
+      #envBtn {
+        min-width: 44px;
+      }
+      #envPanel {
+        position: fixed;
+        left: max(12px, env(safe-area-inset-left));
+        bottom: max(14px, env(safe-area-inset-bottom));
+        width: min(390px, calc(100vw - 24px));
+        padding: 11px;
+        border-radius: 18px;
+        z-index: 35;
+        display: none;
+      }
+      #envPanel.show {
+        display: block;
+      }
+      .env-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .env-head b {
+        font-size: 12px;
+        letter-spacing: .04em;
+      }
+      #envCloseBtn {
+        min-width: 30px;
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        border-radius: 50%;
+        font-size: 17px;
+      }
+      #envTools, .env-weather {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+      }
+      #envTools button, .env-weather button {
+        height: 34px;
+        min-width: 54px;
+        padding: 0 9px;
+        font-size: 10px;
+      }
+      #envTools button.active {
+        background: rgba(184, 205, 191, .92);
+        box-shadow: inset 0 0 0 1px rgba(63, 91, 76, .2);
+      }
+      .env-weather {
+        padding-top: 7px;
+        margin-top: 7px;
+        border-top: 1px solid var(--line);
+      }
+      #envStatus {
+        margin-top: 8px;
+        min-height: 28px;
+        padding: 6px 8px;
+        border-radius: 10px;
+        background: rgba(255,255,255,.42);
+        font-size: 9px;
+        line-height: 1.5;
+      }
+      body.env-tool-active #stage {
+        cursor: crosshair;
+      }
+      body.ui-hidden #envPanel {
+        display: none;
+      }
 
       #startupGate {
         position: fixed;
@@ -461,6 +531,28 @@
         body.panel-open #npcList {
           opacity: 0.32;
         }
+        #envPanel {
+          left: max(8px, env(safe-area-inset-left));
+          right: max(8px, env(safe-area-inset-right));
+          bottom: calc(max(8px, env(safe-area-inset-bottom)) + 54px);
+          width: auto;
+          max-height: min(48dvh, 390px);
+          overflow-y: auto;
+          padding: 9px;
+          border-radius: 16px;
+        }
+        #envTools, .env-weather {
+          flex-wrap: nowrap;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: none;
+        }
+        #envTools::-webkit-scrollbar, .env-weather::-webkit-scrollbar { display: none; }
+        #envTools button, .env-weather button {
+          flex: 0 0 auto;
+          min-width: 58px;
+          height: 38px;
+        }
       }
       @media (max-width: 420px) {
         #topbar { gap: 2px; padding: 4px; }
@@ -524,7 +616,7 @@
     <canvas id="stage" aria-label="柔らかな色彩のアイソメトリック世界"></canvas>
     <div id="topbar" class="glass">
       <div id="brand">
-        <b>小さな暮らしの世界</b
+        <b>SUMIKATA</b
         ><span>同じ場所で暮らし、小さな工夫を積み重ねます</span>
       </div>
       <div id="worldStatus">昼・晴れ</div>
@@ -532,8 +624,12 @@
       <button id="pauseBtn" title="一時停止">Ⅱ</button>
       <button class="speed active" data-speed="1">×1</button
       ><button class="speed" data-speed="2">×2</button
-      ><button class="speed" data-speed="4">×4</button>
+      ><button class="speed" data-speed="4">×4</button
+      ><button class="speed" data-speed="8">×8</button
+      ><button class="speed" data-speed="16">×16</button
+      ><button class="speed" data-speed="32">×32</button>
       <div class="sep"></div>
+      <button id="envBtn" title="環境へ働きかける">環境</button>
       <button
         id="landBtn"
         class="active"
@@ -542,6 +638,29 @@
         区画</button
       ><button id="resetBtn" title="世界を作り直す">↻</button
       ><button id="uiBtn" title="UIを隠す">◌</button>
+    </div>
+    <div id="envPanel" class="glass" aria-hidden="true">
+      <div class="env-head">
+        <b>環境へ働きかける</b>
+        <button id="envCloseBtn" aria-label="環境パネルを閉じる">×</button>
+      </div>
+      <div id="envTools">
+        <button class="env-tool" data-tool="tree">木を植える</button>
+        <button class="env-tool" data-tool="stone">石を出す</button>
+        <button class="env-tool" data-tool="cotton">綿を植える</button>
+        <button class="env-tool" data-tool="berry">実を植える</button>
+        <button class="env-tool" data-tool="flower">花を咲かす</button>
+        <button class="env-tool" data-tool="enrich">育てる</button>
+        <button class="env-tool" data-tool="spring">小さな泉</button>
+        <button class="env-tool" data-tool="grass">泉を戻す</button>
+        <button class="env-tool" data-tool="clear">自然物を除く</button>
+        <button class="env-tool" data-tool="none">選択解除</button>
+      </div>
+      <div class="env-weather">
+        <button id="rainNowBtn">雨を呼ぶ</button>
+        <button id="sunNowBtn">晴れにする</button>
+      </div>
+      <div id="envStatus">道具を選び、所有者のいない共有地をタップしてください。NPCへ直接命令せず、資源や天候を変えて反応を観察できます。</div>
     </div>
     <button id="showUiBtn" class="glass" title="UIを再表示する">UI表示</button>
     <div id="npcList" class="glass">
@@ -776,6 +895,8 @@
           speed = 1,
           selectedNpc = null,
           showLand = true,
+          playerTool = null,
+          playerEdits = 0,
           resourceSpawnT = 0;
         let weather = { rain: 0, target: 0, timer: 16, mode: "clear" },
           dayPhase = DAY_OFFSET;
@@ -1140,24 +1261,164 @@
         function baseWalkable(mx, my, npc = null) {
           return stanceHeightAt(mx, my) !== null;
         }
+        function hasImmediateExitAt(x, y, npc) {
+          if (stanceHeightAt(x, y) === null) return false;
+          for (const [nx, ny] of neighbors4(x, y)) {
+            if (!inMicro(nx, ny)) continue;
+            if (Number.isFinite(stepCost(x, y, nx, ny, npc))) return true;
+          }
+          return false;
+        }
+        function findSafeRecoveryAnchor(npc) {
+          const origins = [
+            { x: npc.lastSafeMx, y: npc.lastSafeMy },
+            { x: npc.mx, y: npc.my },
+            npc.plot?.home,
+          ].filter(Boolean);
+          const seen = new Set();
+          for (const origin of origins) {
+            for (let r = 0; r <= 20; r++)
+              for (let dy = -r; dy <= r; dy++)
+                for (let dx = -r; dx <= r; dx++) {
+                  if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+                  const x = origin.x + dx,
+                    y = origin.y + dy,
+                    k = `${x},${y}`;
+                  if (seen.has(k)) continue;
+                  seen.add(k);
+                  if (!inMicro(x, y) || !baseWalkable(x, y, npc)) continue;
+                  if (hasImmediateExitAt(x, y, npc) || (x === npc.plot.home.x && y === npc.plot.home.y))
+                    return { x, y };
+                }
+          }
+          return null;
+        }
+        function clearRoute(npc) {
+          npc.path = [];
+          npc.pathIndex = 0;
+          npc.moveT = 0;
+          npc.target = null;
+          npc.onArrive = null;
+          npc.routeNavVersion = navVersion;
+          npc.motionStall = 0;
+          npc.lastMotionPmx = npc.mx;
+          npc.lastMotionPmy = npc.my;
+        }
         function recoverStuckNpc(npc) {
-          if (stanceHeightAt(npc.mx, npc.my) !== null) return false;
-          for (let r = 1; r <= 14; r++)
-            for (let dy = -r; dy <= r; dy++)
-              for (let dx = -r; dx <= r; dx++) {
-                if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-                const x = npc.mx + dx, y = npc.my + dy;
-                if (!inMicro(x, y) || !baseWalkable(x, y, npc)) continue;
-                npc.mx = npc.pmx = x;
-                npc.my = npc.pmy = y;
-                npc.path = [];
-                npc.pathIndex = 0;
-                npc.state = "idle";
-                npc.plan = null;
-                npc.activity = "塞がれていた場所から安全な空間へ出ました";
-                setBubble(npc, "ここは通れなかった", 1.8);
-                return true;
-              }
+          if (stanceHeightAt(npc.mx, npc.my) !== null) {
+            npc.lastSafeMx = npc.mx;
+            npc.lastSafeMy = npc.my;
+            return false;
+          }
+          const oldPlan = npc.plan,
+            q = findSafeRecoveryAnchor(npc);
+          if (!q) return false;
+          if (oldPlan?.kind === "gather" && !oldPlan.expedition)
+            npc.pendingGather = {
+              material: oldPlan.material,
+              targetStock: oldPlan.targetStock || null,
+            };
+          if (oldPlan?.kind === "build" && npc.objective?.kind === "improve") {
+            const a = oldPlan.candidate;
+            if (a) npc.objective.blockedCandidates[candidateKey(a)] = true;
+            npc.objective.candidate = null;
+            npc.objective.stalls++;
+          }
+          if (oldPlan?.kind === "stairBuild" && npc.expedition)
+            npc.expedition.stalls = (npc.expedition.stalls || 0) + 1;
+          npc.mx = npc.pmx = q.x;
+          npc.my = npc.pmy = q.y;
+          clearRoute(npc);
+          npc.state = "idle";
+          npc.plan = null;
+          npc.carry = null;
+          npc.nextDecision = 0;
+          npc.lastSafeMx = q.x;
+          npc.lastSafeMy = q.y;
+          npc.recoveryCount = (npc.recoveryCount || 0) + 1;
+          npc.activity = "通れない場所から、最後に歩けた空間へ戻りました";
+          setBubble(npc, "ここでは動けない。戻って別の道を探そう", 2.1);
+          return true;
+        }
+        function abortAndReplanRoute(npc, reason = "道が塞がれた") {
+          const target = npc.target ? { ...npc.target } : null,
+            arrive = npc.onArrive,
+            oldPlan = npc.plan;
+          npc.pmx = npc.mx;
+          npc.pmy = npc.my;
+          npc.moveT = 0;
+          if (stanceHeightAt(npc.mx, npc.my) === null) recoverStuckNpc(npc);
+          if (target && baseWalkable(target.x, target.y, npc)) {
+            const res = findPath({ x: npc.mx, y: npc.my }, target, npc, 9000);
+            if (res.reached) {
+              npc.path = res.path;
+              npc.pathIndex = 0;
+              npc.target = target;
+              npc.onArrive = arrive;
+              npc.state = res.path.length ? "moving" : "idle";
+              npc.routeNavVersion = navVersion;
+              npc.motionStall = 0;
+              npc.activity = `${reason}ため、同じ目的へ別の道で向かっています`;
+              if (!res.path.length && arrive) arrive(true);
+              return true;
+            }
+          }
+          if (oldPlan?.kind === "gather" && !oldPlan.expedition) {
+            npc.pendingGather = {
+              material: oldPlan.material,
+              targetStock: oldPlan.targetStock || null,
+            };
+          }
+          if (oldPlan?.kind === "build" && npc.objective?.kind === "improve") {
+            const a = oldPlan.candidate;
+            if (a) npc.objective.blockedCandidates[candidateKey(a)] = true;
+            npc.objective.candidate = null;
+            npc.objective.stalls++;
+          }
+          if (oldPlan?.kind === "stairBuild" && npc.expedition)
+            npc.expedition.stalls = (npc.expedition.stalls || 0) + 1;
+          clearRoute(npc);
+          npc.state = "idle";
+          npc.plan = null;
+          npc.carry = null;
+          npc.nextDecision = 0;
+          npc.recoveryCount = (npc.recoveryCount || 0) + 1;
+          npc.activity = `${reason}ため、目標を保ったまま別の経路を探します`;
+          setBubble(npc, "この道は通れない。別の道から続けよう", 1.9);
+          return false;
+        }
+        function monitorNpcMobility(npc, dt) {
+          if (stanceHeightAt(npc.mx, npc.my) === null)
+            return recoverStuckNpc(npc);
+          npc.lastSafeMx = npc.mx;
+          npc.lastSafeMy = npc.my;
+          if (npc.state === "moving") {
+            const next = npc.path[npc.pathIndex];
+            // The movement function performs the arrival callback on the tick
+            // after the final step. Do not mistake that one-tick handoff for a
+            // broken route.
+            if (!next && npc.pathIndex >= npc.path.length) return false;
+            if (!next || !baseWalkable(next.x, next.y, npc) || !Number.isFinite(stepCost(npc.mx, npc.my, next.x, next.y, npc))) {
+              abortAndReplanRoute(npc, "途中の地形が変わった");
+              return true;
+            }
+            const moved = Math.hypot(npc.pmx - npc.lastMotionPmx, npc.pmy - npc.lastMotionPmy);
+            npc.motionStall = moved > 0.01 ? 0 : (npc.motionStall || 0) + dt;
+            npc.lastMotionPmx = npc.pmx;
+            npc.lastMotionPmy = npc.pmy;
+            if (npc.motionStall > 1.8) {
+              abortAndReplanRoute(npc, "同じ場所で進めなくなった");
+              return true;
+            }
+            npc.inactiveGoalT = 0;
+          } else if ((npc.objective || npc.expedition || npc.pendingGather) && npc.state === "idle" && !npc.plan) {
+            npc.inactiveGoalT = (npc.inactiveGoalT || 0) + dt;
+            if (npc.inactiveGoalT > 3.2) {
+              npc.inactiveGoalT = 0;
+              npc.nextDecision = 0;
+              npc.activity = "止まった原因を見直し、同じ目的の別案を探しています";
+            }
+          } else npc.inactiveGoalT = 0;
           return false;
         }
         function placementHitsNpcBody(a) {
@@ -1171,6 +1432,44 @@
             ) return true;
           }
           return false;
+        }
+        function positionHasEscape(x, y, npc) {
+          if (stanceHeightAt(x, y) === null) return false;
+          for (const [nx, ny] of neighbors4(x, y))
+            if (inMicro(nx, ny) && Number.isFinite(stepCost(x, y, nx, ny, npc)))
+              return true;
+          return false;
+        }
+        function placementPreservesMobility(npc, a, builderAccess = null) {
+          if (!a || a.action !== "place" || a.material === "flower" || a.action === "furnish")
+            return true;
+          const m = microAt(a.x, a.y);
+          if (!m || m.stack[a.z]) return false;
+          const oldDisabled = navCacheDisabled,
+            old = m.stack[a.z];
+          m.stack[a.z] = {
+            type: a.material,
+            variant: a.variant || 0,
+            placedBy: npc.id,
+            access: !!a.access,
+            tint: a.tint || npc.color,
+          };
+          navCacheDisabled = true;
+          let safe = true;
+          const checks = [];
+          if (builderAccess) checks.push({ x: builderAccess.x, y: builderAccess.y, npc });
+          for (const other of npcs)
+            if (Math.max(Math.abs(other.mx - a.x), Math.abs(other.my - a.y)) <= 10)
+              checks.push({ x: other.mx, y: other.my, npc: other });
+          for (const q of checks) {
+            if (stanceHeightAt(q.x, q.y) === null || !positionHasEscape(q.x, q.y, q.npc)) {
+              safe = false;
+              break;
+            }
+          }
+          m.stack[a.z] = old;
+          navCacheDisabled = oldDisabled;
+          return safe;
         }
         function randomSharedWalkable(npc, tries = 160) {
           for (let i = 0; i < tries; i++) {
@@ -1196,6 +1495,8 @@
           resourceAccumulator = 0;
           decayAccumulator = 0;
           selectedNpc = null;
+          playerEdits = 0;
+          setPlayerTool(null);
           weather = { rain: 0, target: 0, timer: 16, mode: "clear" };
           dayPhase = DAY_OFFSET;
           for (let y = 0; y < GRID_H; y++) {
@@ -1327,6 +1628,25 @@
                   c.gatherZone = z.id;
               }
         }
+        function resourceSpawnClear(c) {
+          if (!c) return false;
+          const cx = c.x * SUB + 1.5,
+            cy = c.y * SUB + 1.5;
+          for (const n of npcs) {
+            // A resource blocks the middle 2x2 micro-cells of its tile. Keep a
+            // full 4x4-body margin around both the NPC and the next few route
+            // anchors so regrowth cannot close a corridor around somebody.
+            if (Math.abs(n.mx - cx) <= 3.5 && Math.abs(n.my - cy) <= 3.5)
+              return false;
+            const end = Math.min(n.path.length, n.pathIndex + 8);
+            for (let i = n.pathIndex; i < end; i++) {
+              const q = n.path[i];
+              if (Math.abs(q.x - cx) <= 3.5 && Math.abs(q.y - cy) <= 3.5)
+                return false;
+            }
+          }
+          return true;
+        }
         function validResourceTile(c) {
           return (
             !!c &&
@@ -1337,7 +1657,8 @@
             !c.foodAccessReserved &&
             c.terrain === "grass" &&
             !c.resource &&
-            !c.flower
+            !c.flower &&
+            resourceSpawnClear(c)
           );
         }
         function placeResource(c, type, quality = 0, force = false) {
@@ -1389,6 +1710,160 @@
           c.flower = null;
           c.flowerRegen = null;
         }
+        function environmentStatus(text) {
+          const el = document.getElementById("envStatus");
+          if (el) el.textContent = text;
+        }
+        function setPlayerTool(tool) {
+          playerTool = tool && tool !== "none" ? tool : null;
+          document.body.classList.toggle("env-tool-active", !!playerTool);
+          document.querySelectorAll(".env-tool").forEach((btn) =>
+            btn.classList.toggle("active", btn.dataset.tool === playerTool),
+          );
+          const labels = {
+            tree: "共有地をタップすると木が育ちます。",
+            stone: "共有地をタップすると石が露出します。",
+            cotton: "共有地をタップすると綿が育ちます。",
+            berry: "共有地をタップすると食べられる実が育ちます。",
+            flower: "共有地をタップすると野花が咲きます。",
+            enrich: "資源のある場所をタップすると、周辺の成長が進みます。",
+            spring: "安全な共有地をタップすると、小さな泉になります。",
+            grass: "プレイヤーが作った泉をタップすると草地へ戻ります。",
+            clear: "共有地の自然物をタップすると取り除きます。NPCの建築は壊しません。",
+          };
+          environmentStatus(playerTool ? labels[playerTool] : "道具の選択を解除しました。通常のNPC選択と地図操作に戻りました。");
+        }
+        function screenToTile(clientX, clientY) {
+          const p = screenToCanvas(clientX, clientY),
+            sx = (p.x - VIEW_W / 2 - camera.x) / Math.max(0.001, camera.zoom),
+            sy = (p.y - 35 - camera.y) / Math.max(0.001, camera.zoom),
+            wx = sx / TILE_W + sy / TILE_H,
+            wy = sy / TILE_H - sx / TILE_W;
+          return { x: Math.floor(wx), y: Math.floor(wy) };
+        }
+        function tileHasPlayerBlockingStructure(c) {
+          if (!c) return true;
+          for (let my = c.y * SUB; my < (c.y + 1) * SUB; my++)
+            for (let mx = c.x * SUB; mx < (c.x + 1) * SUB; mx++) {
+              const m = microAt(mx, my);
+              if (m && (blockCount(m) > 0 || m.flower || m.furnishing)) return true;
+            }
+          return false;
+        }
+        function playerSharedTile(c, requireGrass = true) {
+          return !!c &&
+            c.owner === null &&
+            !c.highland &&
+            !c.stairReserved &&
+            !c.foodAccessReserved &&
+            (!requireGrass || c.terrain === "grass");
+        }
+        function playerCanAddNatural(c) {
+          return playerSharedTile(c, true) &&
+            !c.resource && !c.flower &&
+            !tileHasPlayerBlockingStructure(c) &&
+            resourceSpawnClear(c);
+        }
+        function forceWeather(mode) {
+          if (mode === "rain") {
+            weather.mode = "rain";
+            weather.target = 1;
+            weather.rain = Math.max(weather.rain, 0.72);
+            weather.timer = rand(18, 30);
+            environmentStatus("雨を呼びました。濡れ方や雨よけへの反応が変わります。");
+          } else {
+            weather.mode = "clear";
+            weather.target = 0;
+            weather.rain = Math.min(weather.rain, 0.08);
+            weather.timer = rand(20, 34);
+            environmentStatus("空を晴れさせました。住民は乾いた環境で行動します。");
+          }
+        }
+        function enrichAround(c) {
+          let changed = 0;
+          for (let y = c.y - 1; y <= c.y + 1; y++)
+            for (let x = c.x - 1; x <= c.x + 1; x++) {
+              const q = cellAt(x, y);
+              if (!q || q.owner !== null || q.highland) continue;
+              if (q.regenType) {
+                q.regenTimer = Math.min(q.regenTimer, 0.08);
+                changed++;
+              }
+              if (q.flowerRegen) {
+                q.flowerRegen.timer = Math.min(q.flowerRegen.timer, 0.08);
+                changed++;
+              }
+              if (q.resource) {
+                q.amount = q.maxAmount;
+                q.grow = 0;
+                changed++;
+              }
+            }
+          return changed;
+        }
+        function applyPlayerToolAt(clientX, clientY) {
+          if (!playerTool) return false;
+          const pos = screenToTile(clientX, clientY), c = cellAt(pos.x, pos.y);
+          if (!c) {
+            environmentStatus("マップの外側です。共有地のタイルを選んでください。");
+            return true;
+          }
+          let changed = false, message = "";
+          if (["tree", "stone", "cotton", "berry"].includes(playerTool)) {
+            if (!playerCanAddNatural(c)) message = "ここには植えられません。所有地・高地・通行中の場所を避けてください。";
+            else {
+              c.gatherZone = c.gatherZone || "手を加えた共有地";
+              changed = placeResource(c, playerTool, 0, true);
+              message = changed ? "共有地の環境が変わりました。住民が利用するか観察できます。" : "この場所は使えませんでした。";
+            }
+          } else if (playerTool === "flower") {
+            if (!playerCanAddNatural(c)) message = "ここには花を咲かせられません。";
+            else {
+              c.flower = { type: "flower", variant: randi(0, 4), wild: true, playerPlaced: true };
+              c.flowerRegen = null;
+              registerActiveResource(c);
+              changed = true;
+              message = "野花を咲かせました。美観を重視する住民が反応することがあります。";
+            }
+          } else if (playerTool === "enrich") {
+            const count = enrichAround(c);
+            changed = count > 0;
+            message = changed ? `周辺の自然 ${count}か所の成長を進めました。` : "周辺に育てられる自然物がありません。";
+          } else if (playerTool === "clear") {
+            if (!playerSharedTile(c, false)) message = "他人の土地や高地の自然物は取り除けません。";
+            else if (!c.resource && !c.flower) message = "この場所には取り除ける自然物がありません。";
+            else {
+              clearResourceCell(c);
+              changed = true;
+              message = "自然物を取り除きました。空いた場所の使われ方が変わります。";
+            }
+          } else if (playerTool === "spring") {
+            if (!playerSharedTile(c, true) || c.resource || c.flower || tileHasPlayerBlockingStructure(c) || !resourceSpawnClear(c)) {
+              message = "ここには泉を作れません。何もない安全な共有地を選んでください。";
+            } else {
+              c.terrain = "water";
+              c.playerWater = true;
+              c.gatherZone = null;
+              changed = true;
+              message = "小さな泉を作りました。住民の移動経路が変化します。";
+            }
+          } else if (playerTool === "grass") {
+            if (c.playerWater && c.terrain === "water") {
+              c.terrain = "grass";
+              c.playerWater = false;
+              changed = true;
+              message = "プレイヤーが作った泉を草地へ戻しました。";
+            } else message = "ここはプレイヤーが作った泉ではありません。";
+          }
+          if (changed) {
+            playerEdits++;
+            terrainCacheKey = "";
+            invalidateNavigation();
+          }
+          environmentStatus(message);
+          return true;
+        }
+
         function createFoodClearings() {
           // Each edge region has one dependable berry patch with a permanently
           // open 4x4-body approach. Random resources never refill this buffer.
@@ -1667,6 +2142,15 @@
             moveT: 0,
             target: null,
             onArrive: null,
+            routeNavVersion: navVersion,
+            motionStall: 0,
+            lastMotionPmx: p.home.x,
+            lastMotionPmy: p.home.y,
+            lastSafeMx: p.home.x,
+            lastSafeMy: p.home.y,
+            inactiveGoalT: 0,
+            recoveryCount: 0,
+            pendingGather: null,
             actionT: 0,
             nextDecision: rand(0.2, 1),
             bob: rand(0, 6.28),
@@ -1822,6 +2306,10 @@
           npc.target = target;
           npc.onArrive = res.reached ? onArrive : null;
           npc.state = npc.path.length ? "moving" : "idle";
+          npc.routeNavVersion = navVersion;
+          npc.motionStall = 0;
+          npc.lastMotionPmx = npc.pmx;
+          npc.lastMotionPmy = npc.pmy;
           if (!npc.path.length && res.reached && onArrive) onArrive(true);
           if (!res.reached) {
             npc.target = null;
@@ -1941,7 +2429,7 @@
         function updateNpc(npc, dt) {
           npc.bob += dt * 2.1;
           updateNeeds(npc, dt);
-          recoverStuckNpc(npc);
+          if (monitorNpcMobility(npc, dt)) return;
           if (
             npc.hunger > 0.8 &&
             npc.plan?.kind !== "eat" &&
@@ -1995,6 +2483,14 @@
             goRest(npc);
             return;
           }
+          if (npc.pendingGather) {
+            const pending = npc.pendingGather;
+            if (planGather(npc, pending.material, null, false, pending.targetStock)) {
+              npc.pendingGather = null;
+              return;
+            }
+            npc.nextDecision = 0.2;
+          }
           // Resume the same environmental improvement after temporary needs or
           // resource gathering. It is discarded only when completed or invalid.
           if (npc.objective?.kind === "improve" && planImprove(npc)) return;
@@ -2028,12 +2524,16 @@
             if (cb) cb(true);
             return;
           }
-          const next = npc.path[npc.pathIndex];
-          npc.moveT += dt * 7.2;
-          const t = clamp(npc.moveT, 0, 1);
-          npc.pmx = npc.mx + (next.x - npc.mx) * t;
-          npc.pmy = npc.my + (next.y - npc.my) * t;
-          if (t >= 1) {
+          let budget = (npc.moveT || 0) + dt * 7.2,
+            hops = 0;
+          const maxHops = 16;
+          while (budget >= 1 && npc.pathIndex < npc.path.length && hops < maxHops) {
+            const next = npc.path[npc.pathIndex];
+            if (!next || !baseWalkable(next.x, next.y, npc) || !Number.isFinite(stepCost(npc.mx, npc.my, next.x, next.y, npc))) {
+              npc.moveT = 0;
+              abortAndReplanRoute(npc, "進路が塞がれた");
+              return;
+            }
             const diff =
               (stanceHeightAt(next.x, next.y) ?? 0) -
               (stanceHeightAt(npc.mx, npc.my) ?? 0);
@@ -2045,8 +2545,12 @@
             npc.my = next.y;
             npc.pmx = npc.mx;
             npc.pmy = npc.my;
-            npc.moveT = 0;
+            npc.lastSafeMx = npc.mx;
+            npc.lastSafeMy = npc.my;
+            npc.motionStall = 0;
             npc.pathIndex++;
+            budget -= 1;
+            hops++;
             const c = tileOfMicro(npc.mx, npc.my),
               m = microAt(npc.mx, npc.my);
             if (c) c.traffic += 0.07;
@@ -2055,6 +2559,26 @@
               registerActiveMicro(m);
             }
           }
+          npc.moveT = budget;
+          if (npc.pathIndex >= npc.path.length) {
+            npc.pmx = npc.mx;
+            npc.pmy = npc.my;
+            npc.moveT = 0;
+            npc.state = "idle";
+            const cb = npc.onArrive;
+            npc.onArrive = null;
+            if (cb) cb(true);
+            return;
+          }
+          const next = npc.path[npc.pathIndex];
+          if (!next || !baseWalkable(next.x, next.y, npc) || !Number.isFinite(stepCost(npc.mx, npc.my, next.x, next.y, npc))) {
+            npc.moveT = 0;
+            abortAndReplanRoute(npc, "進路が塞がれた");
+            return;
+          }
+          const t = clamp(npc.moveT, 0, 1);
+          npc.pmx = npc.mx + (next.x - npc.mx) * t;
+          npc.pmy = npc.my + (next.y - npc.my) * t;
         }
         function beginEat(npc) {
           const start = (awayFromHome = false) => {
@@ -2497,7 +3021,7 @@
             };
             if (!canPlaceVoxel(npc, candidate)) continue;
             const access = findBuildAccess(npc, candidate, 10);
-            if (!access) continue;
+            if (!access || !placementPreservesMobility(npc, candidate, access)) continue;
             npc.plan = { kind: "stairBuild", candidate, mountainId: mountain.id };
             npc.carry = { type: material, variant: candidate.variant, tint: npc.color };
             npc.activity = `${mountain.label}へ、4×4で立てる足場を低い方から作っています`;
@@ -3716,6 +4240,15 @@
           }
 
           const access = findBuildAccess(npc, candidate);
+          if (access && !placementPreservesMobility(npc, candidate, access)) {
+            objective.attempts++;
+            objective.stalls++;
+            objective.blockedCandidates[candidateKey(candidate)] = true;
+            objective.candidate = null;
+            npc.activity = "この置き方では通路が塞がるため、別の位置を試しています";
+            setBubble(npc, "ここに置くと出られない", 1.8);
+            return planProjectInspection(npc) || true;
+          }
           if (!access) {
             objective.attempts++;
             objective.stalls++;
@@ -3890,7 +4423,8 @@
               m &&
               canEdit(npc, m) &&
               npc.stock[a.material] > 0 &&
-              canPlaceVoxel(npc, a)
+              canPlaceVoxel(npc, a) &&
+              placementPreservesMobility(npc, a, { x: npc.mx, y: npc.my })
             ) {
               const changed = setVoxel(a.x, a.y, a.z, {
                 type: a.material,
@@ -3980,7 +4514,8 @@
             } else if (
               (a.material === "wood" || a.material === "stone") &&
               npc.stock[a.material] > 0 &&
-              canPlaceVoxel(npc, a)
+              canPlaceVoxel(npc, a) &&
+              placementPreservesMobility(npc, a, { x: npc.mx, y: npc.my })
             ) {
               changed = setVoxel(a.x, a.y, a.z, {
                 type: a.material,
@@ -4978,8 +5513,11 @@
           dragging = false;
           canvas.classList.remove("dragging");
           if (lastPointer && !moved) {
-            const n = pickNpcAt(e.clientX, e.clientY);
-            if (n) selectNpc(n, false);
+            if (playerTool) applyPlayerToolAt(e.clientX, e.clientY);
+            else {
+              const n = pickNpcAt(e.clientX, e.clientY);
+              if (n) selectNpc(n, false);
+            }
           }
           lastPointer = null;
         }
@@ -5011,6 +5549,23 @@
                 .forEach((b) => b.classList.toggle("active", b === btn));
             }),
         );
+        const envPanel = document.getElementById("envPanel");
+        document.getElementById("envBtn").onclick = () => {
+          const open = !envPanel.classList.contains("show");
+          envPanel.classList.toggle("show", open);
+          envPanel.setAttribute("aria-hidden", open ? "false" : "true");
+          document.getElementById("envBtn").classList.toggle("active", open);
+        };
+        document.getElementById("envCloseBtn").onclick = () => {
+          envPanel.classList.remove("show");
+          envPanel.setAttribute("aria-hidden", "true");
+          document.getElementById("envBtn").classList.remove("active");
+        };
+        document.querySelectorAll(".env-tool").forEach((btn) => {
+          btn.onclick = () => setPlayerTool(btn.dataset.tool);
+        });
+        document.getElementById("rainNowBtn").onclick = () => forceWeather("rain");
+        document.getElementById("sunNowBtn").onclick = () => forceWeather("clear");
         document.getElementById("landBtn").onclick = () => {
           showLand = !showLand;
           document
@@ -5040,6 +5595,13 @@
             document.body.classList.toggle("ui-hidden");
           if (e.key === "r" || e.key === "R")
             document.getElementById("resetBtn").click();
+          if (e.key === "e" || e.key === "E")
+            document.getElementById("envBtn").click();
+          const speedKeys = { "1": 1, "2": 2, "3": 4, "4": 8, "5": 16, "6": 32 };
+          if (speedKeys[e.key]) {
+            const btn = document.querySelector(`.speed[data-speed="${speedKeys[e.key]}"]`);
+            if (btn) btn.click();
+          }
         });
         addEventListener("resize", resizeCss);
         addEventListener("orientationchange", () => setTimeout(resizeCss, 80));
@@ -5099,6 +5661,9 @@
               activeMicro: activeMicroCells.length,
               activeResources: activeResourceCells.length,
               builds: npcs.map((n) => n.buildCount),
+              playerEdits,
+              playerTool,
+              speed,
             });
             document.body.dataset.sim = "running";
           }
@@ -5147,6 +5712,7 @@
             },
             furnitureBuilt: { ...n.furnitureBuilt },
             stance: stanceHeightAt(n.mx, n.my),
+            recoveries: n.recoveryCount || 0,
             objective: n.objective
               ? {
                   kind: n.objective.kind,
