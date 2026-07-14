@@ -811,6 +811,7 @@
             furniture: "chair",
             prefs: { order: 1, openness: 0.72, rhythm: 0.7 },
             style: { compact: 1, ordered: 0.9, radius: 6, shapeWeight: 1.1 },
+            buildScale: 1.4, multiBuild: 0.25, siteSpacing: 14,
           },
           {
             role: "青藤色の木を四角く囲い、柔らかな寝床を好みます",
@@ -825,6 +826,7 @@
             furniture: "bed",
             prefs: { coziness: 1, harmony: 0.9, nature: 0.42 },
             style: { cozy: 1, low: 0.9, radius: 7, shapeWeight: 1.15 },
+            buildScale: 0.8, multiBuild: 0.75, siteSpacing: 10,
           },
           {
             role: "淡い金色の円を描くように花と余白をつなげます",
@@ -839,6 +841,7 @@
             furniture: "both",
             prefs: { nature: 1, openness: 0.9, harmony: 0.76 },
             style: { garden: 1, open: 1, radius: 9, shapeWeight: 1.2 },
+            buildScale: 1.55, multiBuild: 0.55, siteSpacing: 14,
           },
           {
             role: "若草色の石を三角形と反復のリズムで配置します",
@@ -853,6 +856,7 @@
             furniture: "chair",
             prefs: { rhythm: 1, order: 0.96, harmony: 0.72 },
             style: { rhythmic: 1, symmetric: 0.86, radius: 8, shapeWeight: 1.18 },
+            buildScale: 1.0, multiBuild: 0.65, siteSpacing: 12,
           },
           {
             role: "藤色の石を渦状に積み、高低差を強く残します",
@@ -867,6 +871,7 @@
             furniture: "bed",
             prefs: { height: 1, rhythm: 0.76, openness: 0.46 },
             style: { vertical: 1, stacked: 1, radius: 7, shapeWeight: 1.12 },
+            buildScale: 1.35, multiBuild: 0.3, siteSpacing: 13,
           },
           {
             role: "珊瑚色の木と綿を波形に沿わせ、不規則さを残します",
@@ -881,6 +886,7 @@
             furniture: "both",
             prefs: { organic: 1, nature: 0.92, coziness: 0.62 },
             style: { organic: 1, natural: 0.9, radius: 9, shapeWeight: 1.2 },
+            buildScale: 0.75, multiBuild: 0.85, siteSpacing: 9,
           },
         ];
         let world = [],
@@ -2186,6 +2192,8 @@
             // gathering, eating and resting. It ends only when its measured
             // inconvenience is sufficiently reduced or repeated attempts fail.
             objective: null,
+            buildSites: [{ x: p.home.x, y: p.home.y, projects: 0 }],
+            completedProjects: 0,
           });
         }
         function isResourceBlocked(mx, my) {
@@ -3060,13 +3068,18 @@
               source, true);
           return planStairBuild(npc, mountain);
         }
-        function entryDirection(npc) {
-          const h = npc.plot.home,
-            e = npc.plot.entrance,
-            dx = e.x - h.x,
-            dy = e.y - h.y;
-          if (Math.abs(dx) > Math.abs(dy)) return { x: Math.sign(dx), y: 0 };
-          return { x: 0, y: Math.sign(dy) };
+        function projectAnchor(npc, objective = npc.objective) {
+          return objective?.anchor || npc.plot.home;
+        }
+        function projectRadius(npc, objective = npc.objective) {
+          return objective?.radius || Math.max(5, npc.style.radius || 7);
+        }
+        function entryDirection(npc, center = npc.plot.home) {
+          const e = npc.plot.entrance,
+            dx = e.x - center.x,
+            dy = e.y - center.y;
+          if (Math.abs(dx) > Math.abs(dy)) return { x: Math.sign(dx) || 1, y: 0 };
+          return { x: 0, y: Math.sign(dy) || 1 };
         }
         function neighbors4(x, y) {
           return [
@@ -3091,23 +3104,21 @@
             if (blockAt(x, y, z)) n++;
           return n / 3;
         }
-        function directionCover(npc, dx, dy) {
-          const h = npc.plot.home,
-            base = groundHeightAt(h.x, h.y);
+        function directionCover(npc, dx, dy, center = npc.plot.home) {
+          const base = groundHeightAt(center.x, center.y);
           let best = 0;
           for (let d = 2; d <= 4; d++)
             for (let o = -1; o <= 1; o++) {
-              const x = h.x + dx * d + (dy ? o : 0),
-                y = h.y + dy * d + (dx ? o : 0);
+              const x = center.x + dx * d + (dy ? o : 0),
+                y = center.y + dy * d + (dx ? o : 0);
               best = Math.max(best, wallStrengthAt(x, y, base));
             }
           return best;
         }
-        function corridorScore(npc) {
-          const h = npc.plot.home,
-            d = entryDirection(npc);
-          let x = h.x,
-            y = h.y,
+        function corridorScore(npc, center = npc.plot.home) {
+          const d = entryDirection(npc, center);
+          let x = center.x,
+            y = center.y,
             prev = groundHeightAt(x, y),
             ok = 0,
             total = 0;
@@ -3119,41 +3130,54 @@
             const gh = stanceHeightAt(x, y),
               walk = gh !== null && Math.abs(gh - prev) <= 3;
             if (walk) ok++;
-            prev = gh;
+            if (gh !== null) prev = gh;
           }
           return total ? ok / total : 0;
         }
-        function homeBeauty(npc) {
-          const h = npc.plot.home,
-            materials = { wood: 0, stone: 0 },
+        function localBuildDensity(center, radius = 6) {
+          let occupied = 0, cells = 0;
+          for (let dy = -radius; dy <= radius; dy++)
+            for (let dx = -radius; dx <= radius; dx++) {
+              if (Math.max(Math.abs(dx), Math.abs(dy)) > radius) continue;
+              const m = microAt(center.x + dx, center.y + dy);
+              if (!m) continue;
+              cells++;
+              if (blockCount(m) || m.flower || m.furnishing) occupied++;
+            }
+          return cells ? occupied / cells : 1;
+        }
+        function homeBeauty(npc, center = npc.plot.home, radius = 5) {
+          const materials = { wood: 0, stone: 0, cotton: 0 },
             heights = [],
             flowers = [];
           let empty = 0,
             cells = 0;
-          for (let dy = -5; dy <= 5; dy++)
-            for (let dx = -5; dx <= 5; dx++) {
-              const x = h.x + dx,
-                y = h.y + dy;
-              if (!inMicro(x, y) || cheb({ x, y }, h) > 5) continue;
+          const sampleR = Math.max(4, Math.min(8, radius));
+          for (let dy = -sampleR; dy <= sampleR; dy++)
+            for (let dx = -sampleR; dx <= sampleR; dx++) {
+              const x = center.x + dx,
+                y = center.y + dy;
+              if (!inMicro(x, y) || cheb({ x, y }, center) > sampleR) continue;
               const m = microAt(x, y);
               cells++;
               const th = topHeightAt(x, y);
               heights.push(th);
-              if (th === 0) empty++;
+              if (th === 0 && !m.flower && !m.furnishing) empty++;
               for (const b of m.stack)
                 if (b) materials[b.type] = (materials[b.type] || 0) + 1;
               if (m.flower) flowers.push({ dx, dy });
             }
-          const totalMat = materials.wood + materials.stone,
+          const totalMat = materials.wood + materials.stone + materials.cotton,
             harmony = totalMat
-              ? Math.max(materials.wood, materials.stone) / totalMat
+              ? Math.max(materials.wood, materials.stone, materials.cotton) / totalMat
               : 0.5;
           let sym = 0,
             symN = 0;
-          for (let dy = -4; dy <= 4; dy++)
-            for (let dx = 1; dx <= 4; dx++) {
-              const a = microAt(h.x + dx, h.y + dy),
-                b = microAt(h.x - dx, h.y + dy);
+          const symR = Math.min(5, sampleR);
+          for (let dy = -symR; dy <= symR; dy++)
+            for (let dx = 1; dx <= symR; dx++) {
+              const a = microAt(center.x + dx, center.y + dy),
+                b = microAt(center.x - dx, center.y + dy);
               if (!a || !b) continue;
               sym += Math.max(
                 0,
@@ -3162,7 +3186,7 @@
               symN++;
             }
           const order = symN ? sym / symN : 0.5,
-            nature = clamp(flowers.length / 9, 0, 1),
+            nature = clamp(flowers.length / Math.max(7, sampleR * 1.5), 0, 1),
             openness = cells ? empty / cells : 1;
           let rhythm = 0,
             rn = 0;
@@ -3184,16 +3208,15 @@
           const w = parts.reduce((n, p) => n + p[1], 0) || 1;
           return parts.reduce((n, p) => n + p[0] * p[1], 0) / w;
         }
-        function evaluateHome(npc) {
-          const h = npc.plot.home,
-            entry = entryDirection(npc),
+        function evaluateHabitat(npc, center = npc.plot.home, radius = 5) {
+          const entry = entryDirection(npc, center),
             dirs = [
               [1, 0],
               [-1, 0],
               [0, 1],
               [0, -1],
             ],
-            covers = dirs.map(([dx, dy]) => directionCover(npc, dx, dy));
+            covers = dirs.map(([dx, dy]) => directionCover(npc, dx, dy, center));
           let entryIndex = dirs.findIndex(
             ([dx, dy]) => dx === entry.x && dy === entry.y,
           );
@@ -3207,11 +3230,11 @@
             soft = 0,
             seat = 0,
             n = 0;
-          const centerH = groundHeightAt(h.x, h.y);
+          const centerH = groundHeightAt(center.x, center.y);
           for (let dy = -1; dy <= 1; dy++)
             for (let dx = -1; dx <= 1; dx++) {
-              const x = h.x + dx,
-                y = h.y + dy;
+              const x = center.x + dx,
+                y = center.y + dy;
               if (!inMicro(x, y)) continue;
               n++;
               roof += overheadCoverAt(x, y);
@@ -3228,10 +3251,10 @@
           roof = n ? roof / n : 0;
           clear = n ? clear / n : 0;
           flat = n ? flat / n : 0;
-          const corridor = corridorScore(npc),
+          const corridor = corridorScore(npc, center),
             access = clamp(entryOpen * 0.55 + corridor * 0.45, 0, 1),
             comfort = clamp((soft / Math.max(1, n)) * 1.15 + (seat / Math.max(1, n)) * 0.42, 0, 1),
-            beauty = homeBeauty(npc);
+            beauty = homeBeauty(npc, center, radius);
           return {
             cover: roof,
             enclosure,
@@ -3245,8 +3268,62 @@
             corridor,
           };
         }
+        function evaluateHome(npc) {
+          return evaluateHabitat(npc, npc.plot.home, 5);
+        }
+        function chooseProjectAnchor(npc, concernKey) {
+          npc.buildSites ||= [{ x: npc.plot.home.x, y: npc.plot.home.y, projects: 0 }];
+          const home = npc.plot.home,
+            scale = npc.profile.buildScale || 1,
+            multi = npc.profile.multiBuild || 0,
+            existingDensity = localBuildDensity(home, Math.max(6, npc.style.radius || 7)),
+            canBranch = npc.completedProjects > 0 && npc.buildSites.length < 6,
+            wantsBranch = canBranch &&
+              (concernKey === "beauty" || concernKey === "comfort" || concernKey === "exposed") &&
+              (rnd() < multi || existingDensity > 0.24 + (1 - multi) * 0.12);
+          if (!wantsBranch) return { x: home.x, y: home.y, isHome: true };
+          const p = npc.plot,
+            minSpacing = npc.profile.siteSpacing || 10,
+            candidates = [];
+          for (let i = 0; i < 34; i++) {
+            const x = randi(p.mx0 + 6, p.mx0 + p.mw - 7),
+              y = randi(p.my0 + 6, p.my0 + p.mh - 7),
+              q = { x, y };
+            if (!baseWalkable(x, y, npc)) continue;
+            let nearest = Infinity;
+            for (const site of npc.buildSites)
+              nearest = Math.min(nearest, cheb(q, site));
+            if (nearest < minSpacing) continue;
+            const density = localBuildDensity(q, Math.max(4, Math.round(5 * scale))),
+              edgeClearance = Math.min(x - p.mx0, p.mx0 + p.mw - 1 - x, y - p.my0, p.my0 + p.mh - 1 - y),
+              score = (1 - density) * 2.2 + Math.min(1.2, nearest / minSpacing) + edgeClearance * 0.015 + rnd() * 0.25;
+            candidates.push({ x, y, score });
+          }
+          candidates.sort((a, b) => b.score - a.score);
+          for (const q of candidates.slice(0, 8)) {
+            const res = findPath({ x: npc.mx, y: npc.my }, { x: q.x, y: q.y }, npc, 4200);
+            if (!res.reached) continue;
+            const site = { x: q.x, y: q.y, projects: 0 };
+            npc.buildSites.push(site);
+            return { x: q.x, y: q.y, isHome: false };
+          }
+          return { x: home.x, y: home.y, isHome: true };
+        }
         function strongestConcern(npc) {
           const c = npc.concerns,
+            unused = 1 - localBuildDensity(
+              npc.plot.home,
+              Math.max(7, Math.min(13, Math.round((npc.style.radius || 7) * (npc.profile.buildScale || 1)))),
+            ),
+            developmentPressure = clamp(
+              unused * (
+                0.2 +
+                (npc.profile.multiBuild || 0) * 0.35 +
+                Math.max(0, (npc.profile.buildScale || 1) - 1) * 0.18
+              ) + Math.min(0.12, (npc.completedProjects || 0) * 0.012),
+              0,
+              0.7,
+            ),
             items = [
               { key: "wet", value: c.wet, text: "ここでは雨に濡れる" },
               {
@@ -3259,8 +3336,8 @@
               { key: "comfort", value: c.comfort, text: "寝床や休む場所がかたい" },
               {
                 key: "beauty",
-                value: c.beauty,
-                text: "もっと好きな景色にしたい",
+                value: Math.max(c.beauty, developmentPressure),
+                text: "まだ使われていない場所も自分らしく整えたい",
               },
             ];
           items.sort((a, b) => b.value - a.value);
@@ -3303,7 +3380,10 @@
         }
         function projectMeasure(npc, objective = npc.objective) {
           if (!objective || objective.kind !== "improve") return Infinity;
-          return concernMeasureFromHome(objective.concernKey, evaluateHome(npc));
+          return concernMeasureFromHome(
+            objective.concernKey,
+            evaluateHabitat(npc, objective.anchor || npc.plot.home, objective.radius || 5),
+          );
         }
         function projectProgress(npc, objective = npc.objective) {
           if (!objective || objective.kind !== "improve") return 0;
@@ -3312,13 +3392,14 @@
         }
         function projectResolved(npc, objective = npc.objective) {
           if (!objective || objective.kind !== "improve") return true;
+          if ((objective.edits || 0) < (objective.minimumEdits || 0)) return false;
           return projectMeasure(npc, objective) <= objective.targetMeasure;
         }
         function shapeAffinity(npc, x, y) {
-          const h = npc.plot.home,
+          const h = projectAnchor(npc),
             dx = x - h.x,
             dy = y - h.y,
-            r = Math.max(3, Math.min(8, npc.style.radius - 1)),
+            r = Math.max(3, Math.min(15, projectRadius(npc) - 1)),
             shape = npc.favoriteShape;
           if (shape === "diamond")
             return clamp(1 - Math.abs(Math.abs(dx) + Math.abs(dy) - r) / 2.2, 0, 1);
@@ -3344,13 +3425,13 @@
           return clamp(1 - Math.abs(dy - waveY) / 2, 0, 1) * (Math.abs(dx) <= r ? 1 : 0);
         }
         function emergentComfortCandidate(npc) {
-          const positions = privatePositions(npc, "comfort"), candidates = [], h = npc.plot.home;
+          const positions = privatePositions(npc, "comfort"), candidates = [], h = projectAnchor(npc);
           for (const pos of positions.slice(0, 36)) {
             const m = microAt(pos.x, pos.y), c = tileOfMicro(pos.x, pos.y);
             if (!m || !c || !canEdit(npc, m) || c.terrain === "water" || isResourceBlocked(pos.x, pos.y)) continue;
             const d = cheb(pos, h), f = m.furnishing || {}, shape = shapeAffinity(npc, pos.x, pos.y),
               nearbySoft = neighbors4(pos.x, pos.y).reduce((n, [x, y]) => n + (microAt(x, y)?.furnishing?.soft ? 1 : 0), 0),
-              entry = entryDirection(npc), dx = pos.x - h.x, dy = pos.y - h.y,
+              entry = entryDirection(npc, h), dx = pos.x - h.x, dy = pos.y - h.y,
               inEntry = dx * entry.x + dy * entry.y > 0 && Math.abs(dx * entry.y - dy * entry.x) <= 1;
             if (!f.frame && d >= 2 && d <= 5) candidates.push({
               action: "furnish", material: npc.favoriteMaterial === "stone" ? "stone" : "wood",
@@ -3375,7 +3456,8 @@
           return candidates[0] || null;
         }
         function projectBudget(npc, concernKey) {
-          const prep = npc.preparation || 1,
+          const scale = npc.profile.buildScale || 1,
+            prep = (npc.preparation || 1) * scale * (1.25 + scale * 0.55),
             fav = npc.favoriteMaterial === "cotton" ? "wood" : npc.favoriteMaterial,
             other = fav === "wood" ? "stone" : "wood",
             budget = { wood: 0, stone: 0, cotton: 0, flower: 0 };
@@ -3411,14 +3493,35 @@
         }
         function createImproveObjective(npc) {
           const concern = strongestConcern(npc),
-            startMeasure = concernMeasureFromHome(concern.key, evaluateHome(npc)),
-            budget = projectBudget(npc, concern.key);
+            anchor = chooseProjectAnchor(npc, concern.key),
+            scale = npc.profile.buildScale || 1,
+            radius = Math.max(
+              4,
+              Math.min(
+                16,
+                Math.round((npc.style.radius + (anchor.isHome ? 2 : 0)) * scale + Math.min(3, npc.completedProjects) * 0.7),
+              ),
+            ),
+            startMeasure = concernMeasureFromHome(
+              concern.key,
+              evaluateHabitat(npc, anchor, radius),
+            ),
+            budget = projectBudget(npc, concern.key),
+            satelliteFactor = anchor.isHome ? 1 : 0.68,
+            baseEdits = concern.key === "comfort" ? 92 : concern.key === "beauty" ? 150 : 178,
+            maxEdits = Math.round(clamp(baseEdits * scale * satelliteFactor, 52, 360)),
+            minimumEdits = Math.round(clamp((anchor.isHome ? 42 : 16) * scale, 12, 90)),
+            targetFactor = scale >= 1.25 ? 0.34 : scale <= 0.85 ? 0.56 : 0.44;
           return {
             kind: "improve", concernKey: concern.key, startMeasure,
-            targetMeasure: Math.max(0.16, startMeasure * 0.58),
-            targetConcern: Math.max(0.16, concern.value * 0.58),
+            targetMeasure: Math.max(0.07, startMeasure * targetFactor),
+            targetConcern: Math.max(0.1, concern.value * targetFactor),
+            anchor: { x: anchor.x, y: anchor.y },
+            isHomeSite: !!anchor.isHome,
+            radius,
             candidate: null, attempts: 0, stalls: 0, edits: 0,
-            maxEdits: concern.key === "comfort" ? 64 : 112,
+            minimumEdits,
+            maxEdits,
             reason: concernActionText(concern.key), phase: "gather",
             materialRemaining: { ...budget }, initialBudget: { ...budget },
             blockedCandidates: {}, replans: 0, strategySeed: randi(0, 9999),
@@ -3434,8 +3537,22 @@
                 npc.concerns[objective.concernKey],
                 objective.concernKey === "comfort" ? 0.08 : objective.targetConcern,
               );
+            npc.completedProjects = (npc.completedProjects || 0) + 1;
+            const site = (npc.buildSites || []).find(
+              (q) => q.x === objective.anchor?.x && q.y === objective.anchor?.y,
+            );
+            if (site) site.projects = (site.projects || 0) + 1;
+            const unused = 1 - localBuildDensity(
+              npc.plot.home,
+              Math.max(6, Math.min(12, npc.style.radius || 7)),
+            );
+            npc.concerns.beauty = clamp(
+              npc.concerns.beauty + unused * (npc.profile.multiBuild || 0) * 0.16,
+              0,
+              1,
+            );
             npc.activity = `${label}が十分に小さくなりました`;
-            setBubble(npc, "ここまで整えられた", 2.2);
+            setBubble(npc, objective.isHomeSite ? "ここまで整えられた" : "新しい居場所ができてきた", 2.2);
           } else {
             npc.activity = `${label}は今の方法ではこれ以上改善できませんでした`;
             setBubble(npc, "別の方法を考えよう", 2.2);
@@ -3444,10 +3561,10 @@
         }
         function projectPotentialScore(npc, a, focusKey) {
           if (a.action !== "place") return 0;
-          const h = npc.plot.home;
+          const h = projectAnchor(npc);
           const dx = a.x - h.x, dy = a.y - h.y;
           const dist = Math.max(Math.abs(dx), Math.abs(dy));
-          const entry = entryDirection(npc);
+          const entry = entryDirection(npc, h);
           const inEntryLane =
             dx * entry.x + dy * entry.y > 0 &&
             Math.abs(dx * entry.y - dy * entry.x) <= 1;
@@ -3553,27 +3670,32 @@
         function blocksHabitatPassage(npc, a) {
           if (a.action !== "place" || a.material === "flower" || a.action === "furnish")
             return false;
-          const h = npc.plot.home,
-            floor = groundHeightAt(h.x, h.y),
-            lowSolid = a.z < floor + BODY_SIZE;
-          if (!lowSolid) return false;
-          if (
-            a.x >= h.x - 1 &&
-            a.x <= h.x + 2 &&
-            a.y >= h.y - 1 &&
-            a.y <= h.y + 2
-          )
-            return true;
-          const d = entryDirection(npc),
-            sx = -d.y,
-            sy = d.x;
-          for (let forward = 1; forward <= 7; forward++)
-            for (let side = -1; side <= 2; side++)
-              if (
-                a.x === h.x + d.x * forward + sx * side &&
-                a.y === h.y + d.y * forward + sy * side
-              )
-                return true;
+          const centers = [npc.plot.home],
+            pa = projectAnchor(npc);
+          if (pa.x !== npc.plot.home.x || pa.y !== npc.plot.home.y) centers.push(pa);
+          for (const h of centers) {
+            const floor = groundHeightAt(h.x, h.y),
+              lowSolid = a.z < floor + BODY_SIZE;
+            if (!lowSolid) continue;
+            if (
+              a.x >= h.x - 1 &&
+              a.x <= h.x + 2 &&
+              a.y >= h.y - 1 &&
+              a.y <= h.y + 2
+            )
+              return true;
+            const d = entryDirection(npc, h),
+              sx = -d.y,
+              sy = d.x,
+              corridorLength = h === npc.plot.home ? 7 : 5;
+            for (let forward = 1; forward <= corridorLength; forward++)
+              for (let side = -1; side <= 2; side++)
+                if (
+                  a.x === h.x + d.x * forward + sx * side &&
+                  a.y === h.y + d.y * forward + sy * side
+                )
+                  return true;
+          }
           return false;
         }
         function canPlaceVoxel(npc, a) {
@@ -3642,13 +3764,13 @@
         }
         function stylePlacementScore(npc, a) {
           if (a.action !== "place") return { score: 0, reason: "" };
-          const h = npc.plot.home,
+          const h = projectAnchor(npc),
             s = npc.style || {},
             dx = a.x - h.x,
             dy = a.y - h.y,
             dist = cheb({ x: a.x, y: a.y }, h),
             m = microAt(a.x, a.y),
-            entry = entryDirection(npc);
+            entry = entryDirection(npc, h);
           const inEntryLane =
             dx * entry.x + dy * entry.y > 0 &&
             Math.abs(dx * entry.y - dy * entry.x) <= 1;
@@ -3744,7 +3866,7 @@
         function privateEditScore(npc, a, before, focusKey = null) {
           navCacheDisabled = true;
           const undo = tempApply(a, npc);
-          const after = evaluateHome(npc);
+          const after = evaluateHabitat(npc, projectAnchor(npc), projectRadius(npc));
           undo();
           navCacheDisabled = false;
           const d = {
@@ -3783,7 +3905,7 @@
             gain += focusDelta * 9.5 + projectPotentialScore(npc, a, focusKey);
             if (focusDelta < -0.02) gain -= 0.7;
           }
-          const dist = cheb({ x: a.x, y: a.y }, npc.plot.home),
+          const dist = cheb({ x: a.x, y: a.y }, projectAnchor(npc)),
             effort =
               0.09 +
               dist * 0.012 +
@@ -3847,12 +3969,12 @@
         }
         function privatePositions(npc, focusKey = null) {
           const p = npc.plot,
-            h = p.home,
-            r = npc.style.radius || 7,
+            h = projectAnchor(npc),
+            r = Math.max(4, Math.min(16, projectRadius(npc))),
             arr = [],
             priority = [],
             seen = new Set(),
-            entry = entryDirection(npc);
+            entry = entryDirection(npc, h);
           const add = (list, x, y) => {
             if (
               x < p.mx0 ||
@@ -3876,12 +3998,12 @@
                 if (affinity > 0.55) shapeCells.push({ x, y, affinity });
               }
             shapeCells.sort((a, b) => b.affinity - a.affinity);
-            for (const q of shapeCells.slice(0, 22)) add(priority, q.x, q.y);
+            for (const q of shapeCells.slice(0, Math.min(48, 14 + r * 2))) add(priority, q.x, q.y);
           }
 
           if (focusKey === "access") {
             const sideX = -entry.y, sideY = entry.x;
-            for (let forward = 1; forward <= 8; forward++)
+            for (let forward = 1; forward <= Math.min(12, r); forward++)
               for (let side = -2; side <= 2; side++)
                 add(
                   priority,
@@ -3889,7 +4011,7 @@
                   h.y + entry.y * forward + sideY * side,
                 );
           } else if (focusKey === "wet" || focusKey === "exposed") {
-            for (let ring = 2; ring <= 5; ring++)
+            for (let ring = 2; ring <= Math.min(8, r); ring++)
               for (let dy = -ring; dy <= ring; dy++)
                 for (let dx = -ring; dx <= ring; dx++) {
                   if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
@@ -3902,8 +4024,8 @@
                   add(priority, h.x + dx, h.y + dy);
                 }
           } else if (focusKey === "clutter") {
-            for (let dy = -5; dy <= 5; dy++)
-              for (let dx = -5; dx <= 5; dx++)
+            for (let dy = -Math.min(8, r); dy <= Math.min(8, r); dy++)
+              for (let dx = -Math.min(8, r); dx <= Math.min(8, r); dx++)
                 add(priority, h.x + dx, h.y + dy);
           }
 
@@ -3924,9 +4046,16 @@
               return (rnd() - 0.5) * 3 + cheb(a, h) * 0.05 - cheb(b, h) * 0.05;
             return cheb(a, h) - cheb(b, h) + (rnd() - 0.5) * 2;
           });
+          const limit = Math.round(
+            clamp(
+              26 + r * 3 + (npc.completedProjects || 0) * 2,
+              38,
+              86,
+            ),
+          );
           return priority.concat(arr).slice(
             0,
-            focusKey ? 42 : npc.style.garden || npc.style.organic ? 24 : 18,
+            focusKey ? limit : npc.style.garden || npc.style.organic ? Math.min(limit, 62) : Math.min(limit, 52),
           );
         }
         function sharedPositions(npc) {
@@ -3965,7 +4094,7 @@
             positions = shared
               ? sharedPositions(npc)
               : privatePositions(npc, focusKey),
-            before = shared ? null : evaluateHome(npc),
+            before = shared ? null : evaluateHabitat(npc, projectAnchor(npc), projectRadius(npc)),
             mats = [];
           for (const material of npc.materialOrder) {
             if (material === "cotton" && focusKey !== "comfort" && focusKey !== "beauty") continue;
@@ -4029,7 +4158,13 @@
                 }
                 continue;
               }
-              const zCap = npc.style.vertical ? 7 : npc.style.garden ? 2 : 4,
+              const zCap = npc.style.vertical
+                  ? 12
+                  : npc.style.garden
+                    ? 3
+                    : npc.style.cozy
+                      ? 5
+                      : 6,
                 top = Math.min(zCap, Math.max(0, topSolidZ(m) + 1)),
                 concern = focusKey || strongestConcern(npc).key,
                 rawZ = [groundHeightAt(pos.x, pos.y), top];
@@ -4087,7 +4222,7 @@
         function planProjectInspection(npc, subject = null, highland = false) {
           const center = highland && subject
             ? { x: subject.x0 + Math.floor(subject.w / 2), y: subject.y0 + Math.floor(subject.h / 2) }
-            : npc.plot.home;
+            : projectAnchor(npc);
           const spots = [];
           for (let r = 4; r <= (highland ? 20 : 10); r += 2)
             for (let i = 0; i < 16; i++) {
@@ -4174,14 +4309,14 @@
             finishImproveObjective(npc, false);
             return true;
           }
-          if (objective.stalls >= 10) {
+          if (objective.stalls >= 16) {
             objective.replans = (objective.replans || 0) + 1;
             objective.stalls = 0;
             objective.attempts = 0;
             objective.candidate = null;
             objective.blockedCandidates = {};
             objective.strategySeed++;
-            if (objective.replans >= 5) {
+            if (objective.replans >= 10) {
               finishImproveObjective(npc, false);
               return true;
             }
@@ -4561,7 +4696,7 @@
                   }
                   objective.bestProgress = Math.max(objective.bestProgress || 0, progress);
                   npc.activity = a.structural
-                    ? `${a.reason}（雨よけ ${Math.round(evaluateHome(npc).cover * 100)}%）`
+                    ? `${a.reason}（雨よけ ${Math.round(evaluateHabitat(npc, projectAnchor(npc), projectRadius(npc)).cover * 100)}%）`
                     : `${concernActionText(objective.concernKey)}（${Math.round(progress * 100)}%）`;
                 }
               } else {
@@ -4754,6 +4889,24 @@
           }
           drawAtmosphere();
         }
+        function drawSkyBodies() {
+          const ns = nightStrength(),
+            isNight = ns > 0.32,
+            x = VIEW_W - Math.max(42, VIEW_W * 0.14),
+            y = Math.max(44, VIEW_H * 0.15),
+            radius = isNight ? 7 : 8;
+          ctx.save();
+          ctx.globalAlpha = isNight ? 0.22 + ns * 0.52 : 0.42;
+          ctx.fillStyle = isNight ? "#f0e6cb" : "#f2d7aa";
+          ctx.beginPath();
+          ctx.arc(x, y, radius + 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = isNight ? 0.72 + ns * 0.24 : 0.72;
+          ctx.beginPath();
+          ctx.arc(x, y, radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
         function drawBackground() {
           const g = ctx.createLinearGradient(0, 0, 0, VIEW_H);
           g.addColorStop(0, palette.skyTop);
@@ -4761,6 +4914,7 @@
           g.addColorStop(1, palette.skyBottom);
           ctx.fillStyle = g;
           ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+          drawSkyBodies();
           ctx.globalAlpha = 0.12;
           for (let i = 0; i < 24; i++) {
             const x = ((i * 89 + simTime * 0.3) % 700) - 30,
@@ -5250,27 +5404,6 @@
           if (ns > 0.01) {
             ctx.fillStyle = `rgba(48,55,88,${0.34 * ns})`;
             ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-            const mx = VIEW_W - Math.max(42, VIEW_W * 0.14),
-              my = Math.max(44, VIEW_H * 0.15);
-            ctx.globalAlpha = 0.35 + 0.55 * ns;
-            ctx.fillStyle = "#f0e6cb";
-            ctx.beginPath();
-            ctx.arc(mx, my, 7, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.globalAlpha = 1;
-          } else {
-            ctx.globalAlpha = 0.45;
-            ctx.fillStyle = "#f2d7aa";
-            ctx.beginPath();
-            ctx.arc(
-              VIEW_W - Math.max(42, VIEW_W * 0.14),
-              Math.max(44, VIEW_H * 0.15),
-              8,
-              0,
-              Math.PI * 2,
-            );
-            ctx.fill();
-            ctx.globalAlpha = 1;
           }
           if (weather.rain > 0.05) {
             ctx.fillStyle = `rgba(92,112,125,${weather.rain * 0.1})`;
@@ -5349,7 +5482,7 @@
           document.getElementById("needInfo").textContent = n.lastInconvenience;
           document.getElementById("activity").textContent = n.activity;
           document.getElementById("landInfo").textContent =
-            `居場所の利用 ${n.homeVisits}回／小さな変更 ${n.homeEdits}回／雨よけ ${Math.round(e.cover * 100)}%／落ち着き ${Math.round(e.enclosure * 100)}%`;
+            `居場所の利用 ${n.homeVisits}回／変更 ${n.homeEdits}回／改善区切り ${n.completedProjects || 0}回／拠点 ${n.buildSites?.length || 1}か所／雨よけ ${Math.round(e.cover * 100)}%／落ち着き ${Math.round(e.enclosure * 100)}%`;
           const improveGoal = n.objective?.kind === "improve"
             ? `　｜　継続目的：${concernLabel(n.objective.concernKey)} ${Math.round(projectProgress(n, n.objective) * 100)}%（${n.objective.edits || 0}手）`
             : "";
